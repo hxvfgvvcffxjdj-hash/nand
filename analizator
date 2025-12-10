@@ -1,0 +1,298 @@
+using System;
+using System.Collections.Generic;
+
+namespace Assembler
+{
+    public class HackTranslator
+    {
+        private readonly Dictionary<string, string> _destTable = new Dictionary<string, string>
+        {
+            ["null"] = "000",
+            ["M"] = "001",
+            ["D"] = "010",
+            ["MD"] = "011",
+            ["DM"] = "011",
+            ["A"] = "100",
+            ["AM"] = "101",
+            ["AD"] = "110",
+            ["AMD"] = "111",
+            ["ADM"] = "111",
+            ["DAM"] = "111",
+            ["DMA"] = "111",
+            ["MAD"] = "111",
+            ["MDA"] = "111"
+        };
+        
+        private readonly Dictionary<string, string> _compTable0 = new Dictionary<string, string>
+        {
+            ["0"] = "0101010",
+            ["1"] = "0111111",
+            ["-1"] = "0111010",
+            ["D"] = "0001100",
+            ["A"] = "0110000",
+            ["!D"] = "0001101",
+            ["!A"] = "0110001",
+            ["-D"] = "0001111",
+            ["-A"] = "0110011",
+            ["D+1"] = "0011111",
+            ["A+1"] = "0110111",
+            ["D-1"] = "0001110",
+            ["A-1"] = "0110010",
+            ["D+A"] = "0000010",
+            ["D-A"] = "0010011",
+            ["A-D"] = "0000111",
+            ["D&A"] = "0000000",
+            ["D|A"] = "0010101"
+        };
+        
+        private readonly Dictionary<string, string> _compTable1 = new Dictionary<string, string>
+        {
+            ["M"] = "1110000",
+            ["!M"] = "1110001",
+            ["-M"] = "1110011",
+            ["M+1"] = "1110111",
+            ["M-1"] = "1110010",
+            ["D+M"] = "1000010",
+            ["D-M"] = "1010011",
+            ["M-D"] = "1000111",
+            ["D&M"] = "1000000",
+            ["D|M"] = "1010101"
+        };
+        
+        private readonly Dictionary<string, string> _jumpTable = new Dictionary<string, string>
+        {
+            ["null"] = "000",
+            ["JGT"] = "001",
+            ["JEQ"] = "010",
+            ["JGE"] = "011",
+            ["JLT"] = "100",
+            ["JNE"] = "101",
+            ["JLE"] = "110",
+            ["JMP"] = "111"
+        };
+        
+        private int _nextVariableAddress = 16;
+        
+        public string[] TranslateAsmToHack(string[] instructions, Dictionary<string, int> symbolTable)
+        {
+            if (instructions == null)
+                return Array.Empty<string>();
+            
+            var result = new List<string>();
+            
+            foreach (var instruction in instructions)
+            {
+                if (string.IsNullOrEmpty(instruction))
+                    continue;
+                
+                string binaryCode = TranslateSingleInstruction(instruction, symbolTable);
+                result.Add(binaryCode);
+            }
+            
+            return result.ToArray();
+        }
+
+        private string TranslateSingleInstruction(string instruction, Dictionary<string, int> symbolTable)
+        {
+            return instruction.StartsWith("@") 
+                ? AInstructionToCode(instruction, symbolTable) 
+                : CInstructionToCode(instruction);
+        }
+
+        public string AInstructionToCode(string aInstruction, Dictionary<string, int> symbolTable)
+        {
+            ValidateAInstruction(aInstruction);
+            
+            string addressPart = aInstruction.Substring(1);
+            int address = ParseAddress(addressPart, symbolTable);
+            
+            ValidateAddressRange(address);
+            
+            return ConvertAddressToBinary(address);
+        }
+
+        private void ValidateAInstruction(string instruction)
+        {
+            if (string.IsNullOrEmpty(instruction) || !instruction.StartsWith("@"))
+                throw new FormatException($"Некорректная A-инструкция: {instruction}");
+        }
+
+        private int ParseAddress(string addressPart, Dictionary<string, int> symbolTable)
+        {
+            return IsNumericAddress(addressPart) 
+                ? ParseNumericAddress(addressPart) 
+                : ResolveSymbolicAddress(addressPart, symbolTable);
+        }
+
+        private bool IsNumericAddress(string addressPart)
+        {
+            return int.TryParse(addressPart, out _);
+        }
+
+        private int ParseNumericAddress(string addressPart)
+        {
+            return int.Parse(addressPart);
+        }
+
+        private int ResolveSymbolicAddress(string symbol, Dictionary<string, int> symbolTable)
+        {
+            ValidateSymbolTable(symbol, symbolTable);
+            
+            return symbolTable.ContainsKey(symbol) 
+                ? GetExistingSymbolAddress(symbol, symbolTable) 
+                : AllocateVariableAddress(symbol, symbolTable);
+        }
+
+        private void ValidateSymbolTable(string symbol, Dictionary<string, int> symbolTable)
+        {
+            if (symbolTable == null)
+                throw new FormatException($"Неизвестный символ: {symbol}");
+        }
+
+        private int GetExistingSymbolAddress(string symbol, Dictionary<string, int> symbolTable)
+        {
+            return symbolTable[symbol];
+        }
+
+        private int AllocateVariableAddress(string symbol, Dictionary<string, int> symbolTable)
+        {
+            int address = _nextVariableAddress;
+            symbolTable[symbol] = address;
+            _nextVariableAddress++;
+            return address;
+        }
+
+        private void ValidateAddressRange(int address)
+        {
+            if (address < 0 || address > 32767)
+                throw new FormatException($"Адрес вне диапазона: {address}");
+        }
+
+        private string ConvertAddressToBinary(int address)
+        {
+            string binary = Convert.ToString(address, 2).PadLeft(15, '0');
+            return "0" + binary;
+        }
+
+        public string CInstructionToCode(string cInstruction)
+        {
+            ValidateCInstruction(cInstruction);
+            
+            var parts = ParseCInstructionParts(cInstruction);
+            
+            string compBits = GetCompBits(parts.Comp);
+            string destBits = GetDestBits(parts.Dest);
+            string jumpBits = GetJumpBits(parts.Jump);
+            
+            return AssembleCInstruction(compBits, destBits, jumpBits);
+        }
+
+        private void ValidateCInstruction(string instruction)
+        {
+            if (string.IsNullOrEmpty(instruction))
+                throw new FormatException("Пустая C-инструкция");
+        }
+
+        private (string Dest, string Comp, string Jump) ParseCInstructionParts(string instruction)
+        {
+            string dest = "null";
+            string comp;
+            string jump = "null";
+            
+            bool hasJump = instruction.Contains(";");
+            bool hasDest = instruction.Contains("=");
+            
+            if (hasJump)
+            {
+                return ParseInstructionWithJump(instruction);
+            }
+            
+            return ParseInstructionWithoutJump(instruction, hasDest);
+        }
+
+        private (string Dest, string Comp, string Jump) ParseInstructionWithJump(string instruction)
+        {
+            string[] jumpParts = instruction.Split(';');
+            ValidateJumpParts(jumpParts, instruction);
+            
+            string jump = jumpParts[1];
+            string beforeJump = jumpParts[0];
+            
+            if (beforeJump.Contains("="))
+            {
+                return ParseDestAndComp(beforeJump, jump);
+            }
+            
+            return (Dest: "null", Comp: beforeJump, Jump: jump);
+        }
+
+        private void ValidateJumpParts(string[] jumpParts, string instruction)
+        {
+            if (jumpParts.Length != 2)
+                throw new FormatException($"Некорректный формат C-инструкции: {instruction}");
+        }
+
+        private (string Dest, string Comp, string Jump) ParseInstructionWithoutJump(string instruction, bool hasDest)
+        {
+            if (hasDest)
+            {
+                return ParseDestAndComp(instruction, "null");
+            }
+            
+            return (Dest: "null", Comp: instruction, Jump: "null");
+        }
+
+        private (string Dest, string Comp, string Jump) ParseDestAndComp(string instruction, string jump)
+        {
+            string[] destParts = instruction.Split('=');
+            ValidateDestParts(destParts, instruction);
+            
+            string dest = destParts[0];
+            string comp = destParts[1];
+            
+            return (Dest: dest, Comp: comp, Jump: jump);
+        }
+
+        private void ValidateDestParts(string[] destParts, string instruction)
+        {
+            if (destParts.Length != 2)
+                throw new FormatException($"Некорректный формат C-инструкции: {instruction}");
+        }
+
+        private string GetCompBits(string comp)
+        {
+            if (_compTable0.ContainsKey(comp))
+            {
+                return _compTable0[comp];
+            }
+            
+            if (_compTable1.ContainsKey(comp))
+            {
+                return _compTable1[comp];
+            }
+            
+            throw new FormatException($"Некорректное выражение comp: {comp}");
+        }
+
+        private string GetDestBits(string dest)
+        {
+            if (!_destTable.ContainsKey(dest))
+                throw new FormatException($"Некорректный dest: {dest}");
+            
+            return _destTable[dest];
+        }
+
+        private string GetJumpBits(string jump)
+        {
+            if (!_jumpTable.ContainsKey(jump))
+                throw new FormatException($"Некорректный jump: {jump}");
+            
+            return _jumpTable[jump];
+        }
+
+        private string AssembleCInstruction(string compBits, string destBits, string jumpBits)
+        {
+            return "111" + compBits + destBits + jumpBits;
+        }
+    }
+}
