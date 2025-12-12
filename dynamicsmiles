@@ -1,0 +1,232 @@
+// beforekey = 0
+// while (true) {
+//     key = KBD
+//     if (key != beforekey) {
+//         clearscreen()
+//         if (key == LEFT)  drawsmile(160, 124)
+//         if (key == UP)    drawsmile(256, 82)
+//         if (key == RIGHT) drawsmile(336, 124)
+//         if (key == DOWN)  drawsmile(256, 165)
+//         beforekey = key
+//     }
+// }
+
+// Начало программы
+    @beforekey
+    M=0
+
+(MAINLOOP)
+    // Читаем клавиатуру
+    @KBD
+    D=M
+    @currentkey
+    M=D
+    
+    // Проверяем, изменилась ли клавиша
+    @beforekey
+    D=D-M
+    @MAINLOOP
+    D;JEQ       // Если клавиша не изменилась, перезапустим цикл
+	
+(CLEARSCREEN)
+    // Очистка экрана
+    @SCREEN
+    D=A
+    @addr
+    M=D
+    
+    @8192
+    D=A
+    @n
+    M=D
+    
+    @i
+    M=0
+
+(CLEARLOOP)
+    @i
+    D=M
+    @n
+    D=D-M
+    @AFTERCLEAR
+    D;JGE
+
+    @addr
+    A=M
+    M=0
+
+    @addr
+    M=M+1
+    @i
+    M=M+1
+
+    @CLEARLOOP
+	0;JMP
+
+(AFTERCLEAR)
+    // Проверяем текущую клавишу и рисуем соответствующий смайл
+    @currentkey
+    D=M
+    
+    // Проверяем LEFT (130)
+    @130
+    D=D-A
+    @DRAWLEFT
+    D;JEQ
+    
+    // Проверяем UP (131)
+    @currentkey
+    D=M
+    @131
+    D=D-A
+    @DRAWUP
+    D;JEQ
+    
+    // Проверяем RIGHT (132)
+    @currentkey
+    D=M
+    @132
+    D=D-A
+    @DRAWRIGHT
+    D;JEQ
+    
+    // Проверяем DOWN (133)
+    @currentkey
+    D=M
+    @133
+    D=D-A
+    @DRAWDOWN
+    D;JEQ
+    
+    // Если другая клавиша или нет нажатия - просто обновляем beforekey
+    @UPDATEBEFORE
+    0;JMP
+
+(DRAWLEFT)
+    // left = 160, top = 124
+    @3978
+    D=A
+    @R0
+    M=D
+    @DRAWSMILE
+    0;JMP
+
+(DRAWUP)
+    // left = 256, top = 82
+    @2640
+    D=A
+    @R0
+    M=D
+    @DRAWSMILE
+    0;JMP
+
+(DRAWRIGHT)
+    // left = 336, top = 124
+    @3989
+    D=A
+    @R0
+    M=D
+    @DRAWSMILE
+    0;JMP
+
+(DRAWDOWN)
+    // left = 256, top = 165
+    @5296
+    D=A
+    @R0
+    M=D
+    @DRAWSMILE
+    0;JMP
+
+(DRAWSMILE)
+    // Преобразуем относительный адрес в абсолютный
+    @16384
+    D=A
+    @R0
+    M=D+M
+
+    // Рисуем 8 строк смайла
+    @7224
+    D=A
+    @R0
+    A=M
+    M=D
+
+    @32
+    D=A
+    @R0
+    M=M+D
+
+    @7224
+    D=A
+    @R0
+    A=M
+    M=D
+
+    @32
+    D=A
+    @R0
+    M=M+D
+
+    @7224
+    D=A
+    @R0
+    A=M
+    M=D
+
+    @32
+    D=A
+    @R0
+    M=M+D
+
+    @32
+    D=A
+    @R0
+    M=M+D
+
+    @32
+    D=A
+    @R0
+    M=M+D
+
+    @24582
+    D=A
+    @R0
+    A=M
+    M=D
+
+    @32
+    D=A
+    @R0
+    M=M+D
+
+    @14364
+    D=A
+    @R0
+    A=M
+    M=D
+
+    @32
+    D=A
+    @R0
+    M=M+D
+
+    @4080
+    D=A
+    @R0
+    A=M
+    M=D
+
+(UPDATEBEFORE)
+    // Обновляем beforekey
+    @currentkey
+    D=M
+    @beforekey
+    M=D
+    
+    @MAINLOOP
+    0;JMP
+
+(END)
+	@END
+    0;JMP
