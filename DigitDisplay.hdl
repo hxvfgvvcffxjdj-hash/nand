@@ -1,0 +1,14 @@
+// 7-segments digit display
+//    a
+//   ---
+// f| g |b
+//   ---
+// e|   |c
+//   ---
+//    d
+CHIP DigitDisplay {
+    IN in[4];
+    OUT a, b, c, d, e, f, g;
+    PARTS:
+Mux16Way(sel=in, a0=true,  a1=false, a2=true,  a3=true,  a4=false, a5=true,  a6=true,  a7=true, a8=true,  a9=true, aa=true, ab=false, ac=true, ad=false, ae=true, af=true,  out=a);
+}
